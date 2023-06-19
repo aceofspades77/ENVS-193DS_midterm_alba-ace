@@ -1,0 +1,637 @@
+---
+title: "Code for 'Roads pose a significant barrier to bee movement, mediated by road size, traffic, and bee identity'"
+author: "Gordon Fitch and Chatura Vaidya"
+date: "7/21/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+####This document contains code for all analyses conducted in association with the paper named above. All data referenced are contained in 'Data-Roads_and_bees_2020.xlsx'. Each sheet in that file will need to be converted to a .csv file whose name matches the current sheet name in order to run code.
+
+###Load required packages
+```{r, include=F}
+knitr::opts_chunk$set(echo = FALSE)
+require(broom)
+require(ggplot2)
+require(plyr)
+require(dplyr)
+require(dplyr)
+require(MASS)
+require(car)
+require(AER)
+require(ggpubr)
+require(AICcmodavg)
+```
+
+###Read in data
+```{r, echo=F}
+roadcomp <- read.csv("~/roadcomp.csv", skip=1)
+sites <- read.csv("~/roadsite.csv")
+contig <- read.csv("~/contig.csv", colClasses = c(Site = "factor", type = "factor"))
+veg <- read.csv("~/roadveg.csv", skip=1, colClasses = c(mowed = "factor", flowers = "factor", seminatural = "factor", weed = "factor"))
+veg$lawn[is.na(veg$lawn)] <- 0
+veg$lawn <- as.factor(veg$lawn)
+fvisits <- read.csv("~/flower visits.csv")
+```
+
+###Visitation data - are Coreopsis and Monarda visited by different pollinator species?
+```{r}
+## Get raw visits
+nvisits <- fvisits
+for(i in 6:21) nvisits[,i] <- fvisits[,i]*fvisits$n.flowers
+nvisits$Date <- as.Date(as.character(nvisits$date),"%d-%b")
+
+propv$propvisits_small<- propv$smal.totoal/propv$total.visits
+propv$propvisits_large<- propv$large.total/propv$total.visits
+
+boxplot(propvisits_small ~ propv$plant.species, xlab = "Plant Species", ylab = "Total visits by small-bodied bees")
+boxplot(propvisits_large ~ propv$plant.species, xlab = "Plant Species", ylab = "Total visits by small-bodied bees")
+boxplot(propvisits_small ~ propv$plant.species, xlab = "Plant Species", ylab = "Total visits by small-bodied bees")
+
+
+boxplot(nvisits$small.total ~ nvisits$plant.species, xlab = "Plant Species", ylab = "Total visits by small-bodied bees")
+boxplot(nvisits$large.total ~ nvisits$plant.species, xlab = "Plant Species", ylab = "Total visits by large-bodied bees")
+boxplot(fvisits$large.total ~ fvisits$plant.species, xlab = "Plant Species", ylab = "Visits/Flowers by large-bodied bees")
+boxplot(fvisits$small.total ~ fvisits$plant.species, xlab = "Plant Species", ylab = "Visits/Flowers by small-bodied bees")
+
+ggplot(data=propv, aes(x=plant.species, y=propvisits_large)) + geom_boxplot()+ ylab("Proportion visits per plant by Large pollinators")+ xlab ("Plant species") + theme(axis.text.x = element_text(angle = 90, hjust = 1, size=12)) 
+ggplot(data=propv, aes(x=plant.species, y=propvisits_small)) + geom_boxplot()+ ylab("Proportion visits per plant by Small pollinators")+ xlab ("Plant species") + theme(axis.text.x = element_text(angle = 90, hjust = 1, size=12)) 
+
+wilcox.test(propvisits_small ~ propv$plant.species)
+wilcox.test(propvisits_large ~ propv$plant.species)
+
+vissite <- merge(fvisits, sites, by = "site")
+lanevis <- ggplot(vissite, aes(x=number.of.lanes, y=total)) + geom_jitter(aes(color=speed), size = 3) + facet_grid(cols = vars(plant.species)) + labs(x = "Number of lanes", y = "Total pollinator visits", color = "Speed limit\n(mph)") + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold"))
+summary(glm.nb(total~plant.species, data = vissite))
+
+vis.c <- merge(fvisits, road.c, by = "site")
+vispig.c <- ggplot(subset(vis.c, plant.species=="Coreopsis"), aes(x=total, y=prop.pig.c)) + stat_smooth(method = glm, method.args = list(family = "binomial"), lty = 2, color = "dark gray", fill = "light gray") + geom_jitter(aes(color=number.of.lanes), size = 3) + labs(x = "Total pollinator visits", y = "Proportion of inflorescences\nwith pigment", color = "Lanes\nof traffic") + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold")) + annotate("text", x = 12.5, y = 0.17, label = "Coreopsis\nß = 0.06±0.05\np = 0.20")
+summary(glm.nb(prop.pig.c~total, data = subset(vis.c, plant.species=="Coreopsis")))
+
+vis.m <- merge(fvisits, road.m, by = "site")
+vispig.m <- ggplot(subset(vis.m, plant.species=="Monarda"), aes(x=total, y=prop.pig.mi)) + stat_smooth(method = glm, method.args = list(family = "binomial"), lty = 2, color = "dark gray", fill = "light gray") + geom_jitter(aes(color=number.of.lanes), size = 3) + labs(x = "Total pollinator visits", y = "Proportion of inflorescences\nwith pigment", color = "Lanes\nof traffic") + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold")) + annotate("text", x = 120, y = 0.9, label = "Monarda\nß = -0.006 ± 0.011\np = 0.59")
+summary(glm.nb(prop.pig.mi~total, data = subset(vis.m, plant.species=="Monarda")))
+```
+
+###Do 'across' and 'along' sites differ in their degree of pigment receipt?
+```{r}
+roadcomp2 <- mutate(roadcomp, prop.pig.c = (c.vert.n.high.pigment+c.vert.n.low.pigment)/c.vert.n.flowers, prop.pig.c.hi = c.vert.n.high.pigment/c.vert.n.flowers, prop.pig.m = (m.fist.n.pigment.high+m.fist.n.pigment.low)/m.fist.n.flowers, prop.pig.mi = m.fist.inflor.pigment/m.fist.n.inflorescences)
+roadsite <- merge(roadcomp2, sites, by = "site")
+roadveg <- merge(roadsite, veg, by = c("site", "position"))
+road.c <- subset(roadsite, prop.pig.c != "NA")
+road.m <- subset(roadsite, prop.pig.m != "NA")
+```
+
+####Coreopsis: definitely!
+```{r}
+t.test(prop.pig.c ~ position, paired = T, data = road.c)
+t.test(prop.pig.c ~ position, paired = T, data = subset(road.c, number.of.lanes > 0.5))
+t.test(prop.pig.c ~ position, paired = T, data = subset(road.c, number.of.lanes > 0))
+t.test(prop.pig.c ~ position, paired = T, data = subset(road.c, number.of.lanes == 0))
+t.test(prop.pig.c ~ position, paired = T, data = subset(road.c, number.of.lanes == 0.5))
+
+c.prop.sum.road <- ddply(subset(road.c, number.of.lanes > 0.5), .(position), summarize,
+                  mean = mean(prop.pig.c),
+                  sd = sd(prop.pig.c),
+                  se = sd(prop.pig.c)/sqrt(length(position)),
+                  n = length(position))
+c.prop.sum <- ddply(subset(road.c, number.of.lanes > 0), .(position), summarize,
+                  mean = mean(prop.pig.c),
+                  sd = sd(prop.pig.c),
+                  se = sd(prop.pig.c)/sqrt(length(position)))
+
+f1a <- ggplot(c.prop.sum) + geom_point(data = subset(road.c, number.of.lanes > 0), aes(x=position, y = prop.pig.c, shape = position, color = position), size = 3, alpha = 0.4, position = position_jitter(width = 0.2)) + geom_point(aes(x=position, y = mean, color=position, shape = position), size = 7) + geom_errorbar(aes(ymin=mean-se, ymax=mean+se, x=position, color=position), width = 0.1, size = 1) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold"), legend.position = "none", plot.title = element_text(size = rel(2), face = "bold", hjust = 0.5)) + labs(x="Position relative to road", y="Proportion of flowers\nwith pigment")
+
+f.ga.cor <- ggplot(c.prop.sum) + geom_point(data = subset(road.c, number.of.lanes > 0), aes(x=position, y = prop.pig.c, shape = position, color = position), size = 3, alpha = 0.4, position = position_jitter(width = 0.2)) + geom_point(aes(x=position, y = mean, color=position, shape = position), size = 7) + geom_errorbar(aes(ymin=mean-se, ymax=mean+se, x=position, color=position), width = 0.1, size = 1) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.9)), axis.title = element_text(size=rel(2), face = "bold"), legend.position = "none", plot.title = element_text(size = rel(2), face = "bold", hjust = 0.5)) + labs(x="Position relative to road", y="Proportion of flowers\nwith pigment")
+
+c.prop.sum.path <- ddply(subset(road.c, number.of.lanes == 0), .(position), summarize,
+                  mean = mean(prop.pig.c),
+                  sd = sd(prop.pig.c),
+                  se = sd(prop.pig.c)/sqrt(length(position)))
+f1c <- ggplot(c.prop.sum.path) + geom_point(data = subset(road.c, number.of.lanes == 0), aes(x=position, y = prop.pig.c, shape = position, color = position), size = 3, alpha = 0.4, position = position_jitter(width = 0.2)) + geom_point(aes(x=position, y = mean, color=position, shape = position), size = 7) + geom_errorbar(aes(ymin=mean-se, ymax=mean+se, x=position, color=position), width = 0.1, size = 1) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold"), plot.title = element_text(size = rel(2), face = "bold", hjust = 0.5), legend.position = "none") + labs(x="Position relative to pedestrian path", y="Proportion of flowers\nwith pigment")
+
+c.prop.sum.bike <- ddply(subset(road.c, number.of.lanes == 0.5), .(position), summarize,
+                  mean = mean(prop.pig.c),
+                  sd = sd(prop.pig.c),
+                  se = sd(prop.pig.c)/sqrt(length(position)))
+f1b <- ggplot(c.prop.sum.bike) + geom_point(data = subset(road.c, number.of.lanes == 0.5), aes(x=position, y = prop.pig.c, shape = position, color = position), size = 3, alpha = 0.4, position = position_jitter(width = 0.2)) + geom_point(aes(x=position, y = mean, color=position, shape = position), size = 7) + geom_errorbar(aes(ymin=mean-se, ymax=mean+se, x=position, color=position), width = 0.1, size = 1) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold"), plot.title = element_text(size = rel(2), face = "bold", hjust = 0.5), legend.position = "none") + labs(x="Position relative to bike path", y="Proportion of flowers\nwith pigment")
+
+c.prop.sum2 <- ddply(subset(road.c), .(position, number.of.lanes), summarize,
+                  mean = mean(prop.pig.c),
+                  sd = sd(prop.pig.c),
+                  se = sd(prop.pig.c)/sqrt(length(position)),
+                  n.zero = length(prop.pig.c[prop.pig.c == 0]),
+                  n = length(position),
+                  prop.zero = n.zero/n)
+```
+
+#### t-test comparison by lane
+Interestingly, only bike lanes and one-lane roads were significantly different between across and along, though 3 and 4 lanes were marginally significant. But 2 lanes were not, which is particularly surprising... perhaps due to heterogeneity in 2-lane roads.
+```{r}
+t.test(prop.pig.c ~ position, paired = T, data = subset(roadsite, number.of.lanes==0.0)) #p=0.6
+t.test(prop.pig.c ~ position, paired = T, data = subset(roadsite, number.of.lanes==0.5)) #p=0.05
+t.test(prop.pig.c ~ position, paired = T, data = subset(roadsite, number.of.lanes==1.0)) #p=0.03
+t.test(prop.pig.c ~ position, paired = T, data = subset(roadsite, number.of.lanes==2.0)) #p=0.3
+t.test(prop.pig.c ~ position, paired = T, data = subset(roadsite, number.of.lanes==3.0)) #p=0.09
+t.test(prop.pig.c ~ position, paired = T, data = subset(roadsite, number.of.lanes==4.0)) #p=0.1
+t.test(prop.pig.c ~ position, paired = T, data = subset(roadsite, number.of.lanes==5.0)) #p=0.7
+```
+
+####Monarda: trend in the same direction, but lesser magnitude and only marginally significant (p = 0.05)
+```{r}
+t.test(prop.pig.m ~ position, paired = T, data = road.m)
+t.test(prop.pig.m ~ position, paired = T, data = subset(road.m, number.of.lanes > 0.5))
+t.test(prop.pig.mi ~ position, paired = T, data = subset(road.m, number.of.lanes > 0.5))
+t.test(prop.pig.m ~ position, paired = T, data = subset(road.m, number.of.lanes == 0.5))
+t.test(prop.pig.mi ~ position, paired = T, data = subset(road.m, number.of.lanes == 0.5))
+m.prop.sum <- ddply(subset(road.m, number.of.lanes > 0.5), .(position), summarize,
+                  mean = mean(prop.pig.m),
+                  sd = sd(prop.pig.m),
+                  se = sd(prop.pig.m)/sqrt(length(position)))
+mi.prop.sum <- ddply(subset(road.m, number.of.lanes > 0.5), .(position), summarize,
+                  mean = mean(prop.pig.mi),
+                  sd = sd(prop.pig.mi),
+                  se = sd(prop.pig.mi)/sqrt(length(position)))
+f1d <- ggplot(mi.prop.sum) + geom_point(data = subset(road.m, number.of.lanes > 0), aes(x=position, y = prop.pig.mi, shape = position, color = position), size = 3, alpha = 0.4, position = position_jitter(width = 0.2)) + geom_point(aes(x=position, y = mean, color=position, shape = position), size = 7) + geom_errorbar(aes(ymin=mean-se, ymax=mean+se, x=position, color=position), width = 0.1, size = 1) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold"), plot.title = element_text(size = rel(2), face = "bold", hjust = 0.5), legend.position = "none") + labs(x="Position relative to road", y="Proportion of flowers\nwith pigment")
+
+f.ga.mon <- ggplot(mi.prop.sum) + geom_point(data = subset(road.m, number.of.lanes > 0), aes(x=position, y = prop.pig.mi, shape = position, color = position), size = 3, alpha = 0.4, position = position_jitter(width = 0.2)) + geom_point(aes(x=position, y = mean, color=position, shape = position), size = 7) + geom_errorbar(aes(ymin=mean-se, ymax=mean+se, x=position, color=position), width = 0.1, size = 1) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.9)), axis.title = element_text(size=rel(2), face = "bold"), plot.title = element_text(size = rel(2), face = "bold", hjust = 0.5), legend.position = "none") + labs(x="Position relative to road", y="Proportion of flowers\nwith pigment")
+
+m.prop.sum.bike <- ddply(subset(road.m, number.of.lanes == 0.5), .(position), summarize,
+                  mean = mean(prop.pig.m),
+                  sd = sd(prop.pig.m),
+                  se = sd(prop.pig.m)/sqrt(length(position)))
+mi.prop.sum.bike <- ddply(subset(road.m, number.of.lanes == 0.5), .(position), summarize,
+                  mean = mean(prop.pig.mi),
+                  sd = sd(prop.pig.mi),
+                  se = sd(prop.pig.mi)/sqrt(length(position)))
+f1e <- ggplot(mi.prop.sum.bike) + geom_point(data = subset(road.m, number.of.lanes == 0.5), aes(x=position, y = prop.pig.mi, shape = position, color = position), size = 3, alpha = 0.4, position = position_jitter(width = 0.4)) + geom_point(aes(x=position, y = mean, color=position, shape = position), size = 7) + geom_errorbar(aes(ymin=mean-se, ymax=mean+se, x=position, color=position), width = 0.1, size = 1) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold"), plot.title = element_text(size = rel(2), face = "bold", hjust = 0.5), legend.position = "none") + labs(x="Position relative to bike path", y="Proportion of flowers\nwith pigment")
+
+m.prop.sum2 <- ddply(road.m, .(position, number.of.lanes), summarize,
+                  mean = mean(prop.pig.mi),
+                  sd = sd(prop.pig.mi),
+                  se = sd(prop.pig.mi)/sqrt(length(position)),
+                  n.zero = length(prop.pig.mi[prop.pig.mi == 0]),
+                  n = length(position),
+                  prop.zero = n.zero/n)
+```
+
+
+###Do the two species differ in pigment transfer?
+```{r}
+road.m$species <- "monarda"
+road.m$prop.pig <- road.m$prop.pig.mi
+road.c$species <- "coreopsis"
+road.c$prop.pig <- road.c$prop.pig.c
+mc.comp <- rbind(road.m, road.c)
+t.test(prop.pig ~ species, data = mc.comp)
+```
+
+## Degree of correlation among road variables. 
+####All are significantly correlated. Strongest correlations between # of lanes and distance (very unsurprising) and number of lanes and number of cars. Speed limit less correlated with others. For most of these, I'm only considering roads (ignoring bike and walking paths)
+```{r}
+summary(lm(number.of.cars~number.of.lanes, data = subset(sites, number.of.lanes>0.5))) #R2 = 0.56
+summary(lm(number.of.cars~distance.m, subset(sites, number.of.lanes>0.5))) #R2 = 0.18
+summary(lm(number.of.cars~speed, data = subset(sites, number.of.lanes>0.5))) #R2 = 0.10
+summary(lm(number.of.lanes~distance.m, data = sites)) #R2 = 0.78
+summary(lm(number.of.lanes~speed, data = subset(sites, number.of.lanes>0.5))) #R2 = 0.15
+summary(lm(distance.m~speed, data = subset(sites, number.of.lanes>0.5))) #R2 = 0.14
+```
+
+##Effect of roads characteristics on pigment transfer
+### Binomial GLM with all variables - Coreopsis
+####Given heteroscedasticity, need to weight values.
+```{r}
+corfull <- glm(prop.pig.c ~ position + scale(number.of.cars) + scale(number.of.lanes) + scale(distance.m) + scale(speed), data = road.c, family = binomial)
+vif(corfull) #lanes, distance inflated
+summary(corfull)
+cor2 <- glm(prop.pig.c ~ position + scale(number.of.cars) + scale(number.of.lanes), data = road.c, family = binomial)
+vif(cor2)
+summary(cor2)
+cor.dist <- glm(prop.pig.c ~ position + scale(distance.m), data = road.c, family = binomial)
+summary(cor.dist)
+cor.lanes <- glm(prop.pig.c ~ position + scale(number.of.lanes), data = road.c, family = binomial)
+summary(cor.lanes)
+cor.speed <- glm(prop.pig.c ~ position + scale(speed), data = subset(road.c, number.of.lanes > 0), family = binomial)
+cor.traffic <- glm(prop.pig.c ~ position + scale(number.of.cars), data = road.c, family = binomial)
+```
+
+##Here using weighted GLMs to account for heteroscedasticity.
+For none of the road variables was an interaction term significant - i.e. the slope of the lines for 'across' and 'along' are not significantly different. 
+
+```{r}
+dist.weights <- 1/fitted(lm(abs(residuals(cor.dist)) ~ road.c$distance.m + road.c$position))^2
+cor.dist2 <- glm(prop.pig.c ~ position + scale(distance.m), weights = dist.weights, data = road.c, family = binomial)
+summary(cor.dist2)
+cor.dist3 <- glm(prop.pig.c ~ position * scale(distance.m), weights = dist.weights, data = road.c, family = binomial)
+summary(cor.dist3)
+AICc(cor.dist3)-AICc(cor.dist2)
+road.c.sp <- subset(road.c, speed != "NA")
+cor.dist.sp <- glm(prop.pig.c ~ position + scale(distance.m), data = road.c.sp, family = binomial)
+dist.weights.sp <- 1/fitted(lm(abs(residuals(cor.dist.sp)) ~ road.c.sp$distance.m + road.c.sp$position))^2
+cor.dist.sp2 <- glm(prop.pig.c ~ position + scale(distance.m), weights = dist.weights.sp, data = road.c.sp, family = binomial)
+
+lane.weights <- 1/fitted(lm(abs(residuals(cor.lanes)) ~ road.c$number.of.lanes + road.c$position))^2
+cor.lanes2 <- glm(prop.pig.c ~ position + scale(number.of.lanes), weights = lane.weights, data = road.c, family = "binomial")
+summary(cor.lanes2)
+cor.lanes3 <- glm(prop.pig.c ~ position * scale(number.of.lanes), weights = lane.weights, data = road.c, family = "binomial")
+summary(cor.lanes3) #interaction not significant.
+AICc(cor.lanes3)-AICc(cor.lanes2)
+
+lanes.r <- lm(residuals(cor.dist2) ~ scale(number.of.lanes), weights = lane.weights, data = road.c)
+traffic.r <- lm(residuals(cor.dist2) ~ scale(number.of.cars), weights = traffic.weights, data = road.c)
+speed.r <- lm(residuals(cor.dist.sp2) ~ scale(speed), weights = speed.weights, data = subset(road.c, number.of.lanes > 0))
+traffic.r2 <- lm(residuals(cor.lanes2) ~ scale(number.of.cars), weights = traffic.weights, data = road.c)
+speed.r2 <- lm(residuals(cor.lanes2) ~ scale(speed), weights = traffic.weights, data = road.c)
+dist.r2 <- lm(residuals(cor.lanes2) ~ scale(distance.m), weights = dist.weights, data = road.c)
+
+lanes.r3 <- lm(residuals(cor.traffic2) ~ scale(number.of.lanes), weights = lane.weights, data = road.c)
+speed.r3 <- lm(residuals(cor.traffic2) ~ scale(speed), weights = lane.weights, data = road.c)
+dist.r3 <- lm(residuals(cor.traffic2) ~ scale(distance.m), weights = dist.weights, data = road.c)
+
+speed.weights <- 1/fitted(lm(abs(residuals(cor.speed)) ~ road.c$speed[road.c$number.of.lanes>0] + road.c$position[road.c$number.of.lanes>0]))
+cor.speed2 <- glm(prop.pig.c ~ position + scale(speed), weights = speed.weights, data= subset(road.c, number.of.lanes>0), family = binomial)
+summary(cor.speed2)
+cor.speed3 <- glm(prop.pig.c ~ position * scale(speed), weights = speed.weights, data= subset(road.c, number.of.lanes>0), family = binomial)
+summary(cor.speed3)
+AICc(cor.speed3)-AICc(cor.speed2)
+
+traffic.weights <- 1/fitted(lm(abs(residuals(cor.traffic)) ~ road.c$number.of.cars + road.c$position))
+cor.traffic2 <- glm(prop.pig.c ~ position + scale(number.of.cars), weights = traffic.weights, data = road.c, family = binomial)
+summary(cor.traffic2)
+cor.traffic3 <- glm(prop.pig.c ~ position * scale(number.of.cars), weights = traffic.weights, data = road.c, family = binomial)
+summary(cor.traffic3)
+AICc(cor.traffic3)-AICc(cor.traffic2)
+
+mods <- list("lanes"=cor.lanes2, "dist"=cor.dist2, "traffic"=cor.traffic2)
+aictab(cand.set = mods)
+```
+
+####Pseudo-$R^2$ values
+###Predictors in order of explanatory power (with pseudo-$R^2$ for full model, including position of plants):
+Number of lanes: $R^2 = 0.36$
+Distance: $R^2 = 0.32$
+Traffic (number of cars): $R^2 = 0.26$
+Speed limit: $R^2 = 0.11$
+
+```{r}
+rsq(cor.lanes2)
+AICc(cor.lanes2)
+rsq(cor.dist2)
+AICc(cor.dist2)
+rsq(cor.traffic2)
+AICc(cor.traffic2)
+rsq(cor.speed2)
+AICc(cor.speed2)
+```
+
+
+##Plots - coreopsis and road effects (Fgiure 2)
+###Plot size: 4.4 x 3.3
+###For all plots, Best-fit lines weighted to correct for heteroscedasticity.
+####Proportion of flowers visited ~ traffic
+```{r, warning=F}
+f2c <- ggplot(road.c, aes(y = prop.pig.c, x = number.of.cars, color = position, shape = position, fill = position)) + geom_point(size = 3, position = position_jitter(width = 1), alpha = 0.8) + 
+  geom_smooth(method = glm, method.args = list(family = "binomial"), alpha = 0.2) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold"), plot.title = element_text(size = rel(2), face = "bold", hjust = 0.5), legend.position = "none") + labs(x="Traffic volume (# of vehicles)", y=NULL)
+#ggsave("~/fig2c.png", f2c, width = 4.4, height = 3.3)
+```
+
+####Proportion of flowers visited ~ distance (linear)
+```{r, warning=F}
+f2a <- ggplot(subset(road.c, prop.pig.c != "NA"), aes(y = prop.pig.c, x = distance.m, color = position, shape = position, fill = position)) + geom_point(size = 3, alpha = 0.8, position = position_jitter(width = 1)) + geom_smooth(method = glm, method.args = list(family = "binomial"), alpha=0.2, aes(weight = dist.weights)) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold"), plot.title = element_text(size = rel(2), face = "bold", hjust = 0.5), legend.position = "none") + labs(x="Interplant distance (m)", y=NULL)
+```
+
+####~ number of traffic lanes 
+```{r, warning=F}
+f2b <- ggplot(road.c, aes(y = prop.pig.c, x = number.of.lanes, color = position, shape = position, fill = position)) + geom_point(position = position_jitter(width = 0.1), size = 3, alpha = 0.8) + geom_smooth(method = glm, method.args = list(family = "binomial"), alpha=0.2, aes(weight = lane.weights)) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold"), plot.title = element_text(size = rel(2), face = "bold", hjust = 0.5), legend.position = "none") + labs(x="Number of lanes", y=NULL)
+
+ggplot(c.prop.sum2) + geom_point(data = road.c, aes(y = prop.pig.c, x = number.of.lanes, color = position, shape = position, fill=position), alpha = 0.5, size = 2, position = position_jitter(width=.1)) + geom_point(aes(x=number.of.lanes, y = mean, color=position, shape = position), size = 5, position = position_dodge(width=0.2)) + geom_errorbar(aes(ymin=mean-se, ymax=mean+se, x=number.of.lanes, color=position), width = 0.1, position = position_dodge(width=0.2)) + 
+  geom_smooth(data = road.c, stat = "smooth", position = "identity", aes(y = prop.pig.c, x = number.of.lanes, color = position), method = glm, 
+              method.args = list(family = "binomial"), se=F, aes(weight = lane.weights)) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4))) + labs(x="Number of lanes", y="Proportion of flowers with pigment")
+```
+
+####~ speed limit
+```{r, warning=F}
+f2d <- ggplot(subset(road.c, speed != "NA"), aes(y = prop.pig.c, x = speed, color = position, shape = position, fill=position)) + geom_point(position = position_jitter(width = 0.5), size = 3, alpha = 0.8) + geom_smooth(method = glm, method.args = list(family = "binomial"), alpha=0.2, aes(weight = speed.weights)) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold"), plot.title = element_text(size = rel(2), face = "bold", hjust = 0.5), legend.position = "none") + labs(x="Speed limit (mph)", y=NULL)                                                              
+```
+
+###How does being alongside a road compare to in intact continuous habitat?
+####Surprisingly, we got less pigment moved in the intact habitat than along roads (this is even omitting the replicate with no pigment moved). Probably need to do more replicates, however.
+```{r, warning=F}
+cont.c <- glm(prop.pig ~ scale(Distance), family = binomial, data = cor.contig)
+cont.c2 <- glm(prop.pig ~ scale(Distance) + type, family = binomial, data = cor.contig)
+cont.clawn <- glm(prop.pig ~ scale(Distance), family = binomial, data = subset(cor.contig, type == "lawn"))
+cont.cmeadow <- glm(prop.pig ~ scale(Distance), family = binomial, data = subset(cor.contig, type == "meadow"))
+
+mean(cor.contig$prop.pig, na.rm = T)
+sd(cor.contig$prop.pig, na.rm = T)/sqrt(length(cor.contig$prop.pig[cor.contig$prop.pig != "NA"]))
+mean(road.c$prop.pig.c)
+sd(road.c$prop.pig.c)/sqrt(length(road.c$prop.pig.c))
+t.test(prop.pig ~ type, data = cor.contig)
+wilcox.test(prop.pig ~ type, data = cor.contig)
+sd(cor.contig$prop.pig[cor.contig$type == "lawn"], na.rm = T)/sqrt(length(cor.contig$prop.pig[cor.contig$prop.pig != "NA" & cor.contig$type == "lawn"]))
+sd(cor.contig$prop.pig[cor.contig$type == "meadow"], na.rm = T)/sqrt(length(cor.contig$prop.pig[cor.contig$prop.pig != "NA" & cor.contig$type == "meadow"]))
+
+f4b <- ggplot() + geom_point(data = road.c, aes(y = prop.pig.c, x = distance.m, color = position, shape = position), size = 3, alpha = 0.6) + geom_smooth(data = road.c, aes(y = prop.pig.c, x = distance.m, color = position, weight = dist.weights), method = "glm", method.args = list(family = "binomial"), se=F, fullrange = T, lty = 2) + geom_point(data = subset(cor.contig, Replicate != "b"), aes(y = prop.pig, x = Distance), color = "purple", fill = "purple", shape = 25, size = 3, position = position_jitter(width = 1)) + geom_smooth(data = subset(cor.contig, Replicate != "b"), aes(y = prop.pig, x = Distance), color = "purple", fill = "purple", method = "glm", method.args = list(family="binomial"), alpha = 0.2, fullrange = T) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold"), legend.position = "none") + labs(x="Distance from focal plant (m)", y="Proportion of inflorescences\nwith pigment")
+
+f4c <- ggplot() + geom_point(data = road.c, aes(y = prop.pig.c, x = distance.m, color = position, shape = position), size = 3, alpha = 0.6) + geom_smooth(data = road.c, aes(y = prop.pig.c, x = distance.m, color = position, weight = dist.weights), method = "glm", method.args = list(family = "binomial"), se=F, fullrange = T, alpha = 0.6, lty = 2) + geom_point(data = subset(cor.contig, Replicate != "b"), aes(y = prop.pig, x = Distance, shape = type), color = "purple", fill = "purple", size = 3, position = position_jitter(width = 2)) + scale_shape_manual(values = c("lawn" = 6, "meadow" = 25, "across" = 16, "along" = 17)) + geom_smooth(data = subset(cor.contig, Replicate != "b"), aes(y = prop.pig, x = Distance, lty = type, fill = type), color = "purple", method = "glm", method.args = list(family="binomial"), se=F, fullrange = T) + scale_linetype_manual(values = c("lawn" = "dotdash", "meadow" = "longdash")) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold"), legend.position = "none") + labs(x="Distance from focal plant (m)", y="Proportion of inflorescences\nwith pigment")
+
+f4c.ci <- ggplot() + geom_point(data = road.c, aes(y = prop.pig.c, x = distance.m, color = position, shape = position), size = 3, alpha = 0.6) + geom_smooth(data = road.c, aes(y = prop.pig.c, x = distance.m, color = position, weight = dist.weights), method = "glm", method.args = list(family = "binomial"), se=F, fullrange = T, alpha = 0.6, lty = 2) + geom_point(data = subset(cor.contig, Replicate != "b"), aes(y = prop.pig, x = Distance, shape = type), color = "purple", fill = "purple", size = 3, position = position_jitter(width = 2)) + scale_shape_manual(values = c("lawn" = 6, "meadow" = 25, "across" = 16, "along" = 17)) + geom_smooth(data = subset(cor.contig, Replicate != "b"), aes(y = prop.pig, x = Distance, lty = type, fill = type), color = "purple", method = "glm", method.args = list(family="binomial"), alpha = 0.2, fullrange = T) + scale_fill_manual(values = c("lawn" = "#9900CC", "meadow" = "#9966FF")) + scale_linetype_manual(values = c("lawn" = "dotdash", "meadow" = "longdash")) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold"), legend.position = "none") + labs(x="Distance from focal plant (m)", y="Proportion of inflorescences\nwith pigment")
+
+f4leg <- ggplot() + geom_smooth(data = road.c, aes(y = prop.pig.c, x = distance.m, color = position, weight = dist.weights), method = "glm", method.args = list(family = "binomial"), se=F, fullrange = T, alpha = 0.6) + geom_point(data = subset(cor.contig, Replicate != "b"), aes(y = prop.pig, x = Distance, shape = as.factor(type)), color = "purple", fill = "purple", size = 3, position = position_jitter(width = 2)) + scale_shape_manual(values = c("lawn" = 6, "meadow" = 25)) + geom_smooth(data = subset(cor.contig, Replicate != "b"), aes(y = prop.pig, x = Distance, lty = type), color = "purple", method = "glm", method.args = list(family="binomial"), se=F, fullrange = T) + scale_linetype_manual(values = c("lawn" = "dotdash", "meadow" = "longdash")) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold")) + labs(x="Distance from focal plant (m)", y="Proportion of inflorescences\nwith pigment")
+
+cor.contig$type2 <- "contiguous"
+road.c$type2 <- "roadside"
+cc <- cor.contig[,c(3,19)]
+cc <- rename(cc, prop = prop.pig)
+cr <- road.c[,c(35,36)]
+mr <- rename(mr, prop = prop.pig.mi)
+c2 <- rbind(cc,cr)
+wilcox.test(prop.pig~type, data = c2)
+```
+
+
+## Monarda
+
+####Inflorescence level GLMs - effects of road variables. Not significant effects of position or road variables.
+```{r}
+mon.i.dist <- glm(prop.pig.mi ~ scale(distance.m), data = road.m, family = binomial)
+mon.i.dist2 <- glm(prop.pig.mi ~ position * scale(distance.m), data = road.m, family = binomial)
+summary(mon.i.dist2)
+rsq(mon.i.dist)
+AICc(mon.i.dist2)-AICc(mon.i.dist)
+mon.i.dist3 <- glm(prop.pig.mi ~ position + scale(distance.m), data = road.m, family = binomial)
+
+mon.i.lanes <- glm(prop.pig.mi ~ scale(number.of.lanes), data = road.m, family = binomial)
+mon.i.lanes2 <- glm(prop.pig.mi ~ position * scale(number.of.lanes), data = road.m, family = binomial)
+summary(mon.i.lanes2)
+AICc(mon.i.lanes2)-AICc(mon.i.lanes)
+mon.i.lanes3 <- glm(prop.pig.mi ~ position + scale(number.of.lanes), data = road.m, family = binomial)
+
+rsq(mon.i.lanes)
+mon.i.speed <- glm(prop.pig.mi ~ scale(speed), data = road.m, family = binomial)
+mon.i.speed2 <- glm(prop.pig.mi ~ position * scale(speed), data = road.m, family = binomial)
+summary(mon.i.speed2)
+AICc(mon.i.speed2)-AICc(mon.i.speed)
+mon.i.speed3 <- glm(prop.pig.mi ~ position + scale(speed), data = road.m, family = binomial)
+
+mon.i.traffic <- glm(prop.pig.mi ~ scale(number.of.cars), data = road.m, family = binomial)
+mon.i.traffic2 <- glm(prop.pig.mi ~ position * scale(number.of.cars), data = road.m, family = binomial)
+summary(mon.i.traffic2)
+AICc(mon.i.traffic2)-AICc(mon.i.traffic)
+mon.i.traffic3 <- glm(prop.pig.mi ~ position * scale(number.of.cars), data = road.m, family = binomial)
+
+summary(mon.i.dist3)
+summary(mon.i.lanes3)
+summary(mon.i.speed3)
+summary(mon.i.traffic3)
+
+mon.i.lanes.r <- lm(residuals(mon.i.dist) ~ scale(number.of.lanes), data = road.m)
+mon.i.traffic.r <- lm(residuals(mon.i.dist) ~ scale(number.of.cars), data = road.m)
+mon.i.speed.r <- lm(residuals(mon.i.dist) ~ scale(speed), data = road.m)
+mon.i.dist.r2 <- lm(residuals(mon.i.lanes) ~ scale(distance.m), data = road.m)
+
+rsq(mon.i.dist)
+rsq(mon.i.lanes)
+rsq(mon.i.traffic)
+rsq(mon.i.speed)
+```
+
+###Inforescence level, roads only (excluding bike paths)
+```{r}
+mon.i.dist.road <- glm(prop.pig.mi ~ position * scale(distance.m), data = subset(road.m, number.of.lanes > 0.5), family = binomial)
+mon.i.dist.road2 <- glm(prop.pig.mi ~ scale(distance.m), data = subset(road.m, number.of.lanes > 0.5), family = binomial)
+mon.i.road <- glm(prop.pig.mi ~ 1, data = subset(road.m, number.of.lanes > 0.5), family = binomial)
+AICc(mon.i.dist.road)-AICc(mon.i.dist.road2)
+
+mon.i.lanes.road <- glm(prop.pig.mi ~ position * scale(number.of.lanes), data = subset(road.m, number.of.lanes > 0.5), family = binomial)
+mon.i.lanes.road2 <- glm(prop.pig.mi ~ scale(number.of.lanes), data = subset(road.m, number.of.lanes > 0.5), family = binomial)
+summary(mon.i.lanes.road)
+AICc(mon.i.lanes.road)-AICc(mon.i.lanes.road2)
+
+mon.i.traffic.road <- glm(prop.pig.mi ~ position * scale(number.of.cars), data = subset(road.m, number.of.lanes > 0.5), family = binomial)
+mon.i.traffic.road2 <- glm(prop.pig.mi ~ position, data = subset(road.m, number.of.lanes > 0.5), family = binomial)
+summary(mon.i.traffic.road)
+AICc(mon.i.traffic.road)-AICc(mon.i.traffic.road2)
+
+mon.i.speed.road <- glm(prop.pig.mi ~ position * scale(speed), data = subset(road.m, number.of.lanes > 0.5), family = binomial)
+mon.i.speed.road2 <- glm(prop.pig.mi ~ scale(speed), data = subset(road.m, number.of.lanes > 0.5), family = binomial)
+summary(mon.i.speed.road)
+AICc(mon.i.speed.road)-AICc(mon.i.speed.road2)
+```
+
+####Flower level GLMs - effects of road variables. Not significant effects of position or road variables.
+```{r}
+mon.dist <- glm(prop.pig.m ~ scale(distance.m), data = road.m, family = binomial)
+mon.dist2 <- glm(prop.pig.m ~ position * scale(distance.m), data = road.m, family = binomial)
+summary(mon.dist2)
+AICc(mon.dist2)-AICc(mon.dist)
+
+mon.lanes <- glm(prop.pig.m ~ scale(number.of.lanes), data = road.m, family = binomial)
+mon.lanes2 <- glm(prop.pig.m ~ position * scale(number.of.lanes), data = road.m, family = binomial)
+summary(mon.lanes2)
+AICc(mon.lanes2)-AICc(mon.lanes)
+
+mon.speed <- glm(prop.pig.m ~ scale(speed), data = road.m, family = binomial)
+mon.speed2 <- glm(prop.pig.m ~ position * scale(speed), data = road.m, family = binomial)
+summary(mon.speed2)
+AICc(mon.speed2)-AICc(mon.speed)
+
+mon.traffic <- glm(prop.pig.m ~ scale(number.of.cars), data = road.m, family = binomial)
+mon.traffic2 <- glm(prop.pig.m ~ position * scale(number.of.cars), data = road.m, family = binomial)
+summary(mon.traffic2)
+AICc(mon.traffic2)-AICc(mon.traffic)
+```
+
+###Plots
+####Proportion of flowers visited ~ traffic
+```{r, warning=F}
+ggplot(road.m, aes(y = prop.pig.m, x = number.of.cars, color = position, shape = position)) + geom_point(size = 3, position = position_jitter(width = 2)) + 
+  geom_smooth(method = glm, method.args = list(family = "binomial"), se = FALSE) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.4)), axis.title = element_text(size=rel(1.7)), legend.position = "none", plot.title = element_text(size = rel(2), face = "bold", hjust = 0.5)) + labs(x="Traffic volume (# of vehicles)", y="Proportion of flowers with pigment", title = "Traffic")
+```
+
+####Inflorescences ~ traffic
+```{r}
+f2g <- ggplot(road.m, aes(y = prop.pig.mi, x = number.of.cars, color = position, shape = position, fill = position)) + geom_point(size = 3, position = position_jitter(width = 1), alpha= 0.8) + geom_smooth(method = glm, method.args = list(family = "binomial"), alpha = 0.2) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold"), plot.title = element_text(size = rel(2), face = "bold", hjust = 0.5), legend.position = "none") + labs(x="Traffic volume (# of vehicles)", y=NULL)
+```
+
+####Proportion of flowers visited ~ distance (linear)
+```{r, warning=F}
+f2e <- ggplot(subset(road.m, prop.pig.m != "NA"), aes(y = prop.pig.mi, x = distance.m, color = position, shape = position, fill = position)) + geom_point(size = 3, position = position_jitter(width = 1), alpha = 0.8) + geom_smooth(method = glm, method.args = list(family = "binomial"), alpha = 0.2) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold"), plot.title = element_text(size = rel(2), face = "bold", hjust = 0.5), legend.position = "none") + labs(x="Interplant distance (m)", y=NULL)
+```
+
+####~ number of traffic lanes 
+```{r, warning=F}
+f2f <- ggplot(road.m, aes(y = prop.pig.mi, x = number.of.lanes, color = position, shape = position, fill = position)) + geom_point(position = position_jitter(width = 0.1), size = 3, alpha = 0.8) + geom_smooth(method = glm, method.args = list(family = "binomial"), alpha = 0.2) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold"), plot.title = element_text(size = rel(2), face = "bold", hjust = 0.5), legend.position = "none") + labs(x="Lanes of vehicular traffic", y=NULL)
+
+ggplot(m.prop.sum2) + geom_point(data = road.m, aes(y = prop.pig.m, x = number.of.lanes, color = position, shape = position), alpha = 0.5, size = 2, position = position_jitter(width=.1)) + geom_point(aes(x=number.of.lanes, y = mean, color=position, shape = position), size = 5, position = position_dodge(width=0.2)) + geom_errorbar(aes(ymin=mean-se, ymax=mean+se, x=number.of.lanes, color=position), width = 0.1, position = position_dodge(width=0.2)) + 
+  geom_smooth(data = road.c, stat = "smooth", position = "identity", aes(y = prop.pig.m, x = number.of.lanes, color = position), method = glm, 
+              method.args = list(family = "binomial"), se=F) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4))) + labs(x="Number of lanes", y="Proportion of flowers with pigment")
+```
+
+####~ speed limit
+```{r, warning=F}
+f2h <- ggplot(subset(road.m, speed != "NA"), aes(y = prop.pig.mi, x = speed, color = position, shape = position, fill = position)) + geom_point(alpha = 0.8, size = 3) + 
+  geom_smooth(method = glm, method.args = list(family = "binomial"), alpha = 0.2) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold"), plot.title = element_text(size = rel(2), face = "bold", hjust = 0.5), legend.position = "none") + labs(x="Speed limit (mph)", y=NULL)
+```
+
+###How does being alongside a road compare to in intact continuous habitat?
+####Pigment movement along roads is identical to that in intact habitat - slightly more than in 'across' plants but not significantly (strongly overlapping confidence intervals)
+
+```{r, echo=F}
+cor.contig <- mutate(contig, n.pig = c.vert.n.high.pigment+c.vert.n.low.pigment,
+            prop.pig = n.pig/c.vert.n.flowers)
+
+mon.contig <- mutate(contig, n.pig = m.fist.n.pigment.high+m.fist.n.pigment.low,
+            prop.pig = n.pig/m.fist.n.flowers, prop.pig.i = m.fist.inflor.pig/m.fist.n.inflorescences)
+```
+
+```{r, warning=F}
+mean(mon.contig$prop.pig, na.rm = T)
+sd(mon.contig$prop.pig, na.rm = T)/sqrt(length(mon.contig$prop.pig[mon.contig$prop.pig != "NA"]))
+mean(road.m$prop.pig.m)
+sd(road.m$prop.pig.m)/sqrt(length(road.m$prop.pig.m))
+
+mean(mon.contig$prop.pig.i, na.rm = T)
+sd(mon.contig$prop.pig.i, na.rm = T)/sqrt(length(mon.contig$prop.pig.i[mon.contig$prop.pig.i != "NA"]))
+mean(road.m$prop.pig.mi)
+sd(road.m$prop.pig.mi)/sqrt(length(road.m$prop.pig.mi))
+mon.contig$type <- "contiguous"
+road.m$type <- "roadside"
+mc <- mon.contig[,c(3,20)]
+mc <- rename(mc, prop = prop.pig.i)
+mr <- road.m[,c(23,36)]
+mr <- rename(mr, prop = prop.pig.mi)
+mm <- rbind(mc,mr)
+wilcox.test(prop~type, data = mm)
+
+f4a <- ggplot(road.m) + geom_point(aes(y = prop.pig.mi, x = distance.m, color = position, shape = position), size = 3, alpha = .6) + geom_smooth(aes(y = prop.pig.mi, x = distance.m, color = position, fill=position), se=F, method = "glm", method.args = list(family = "binomial"), fullrange = T, lty= 2) + geom_point(data = subset(mon.contig, Distance > 0), aes(y = prop.pig.i, x = Distance), color = "purple", size = 3, shape = 25, fill = "purple", position = position_jitter(width = 1)) + geom_smooth(data = subset(mon.contig, Distance > 0), aes(y = prop.pig.i, x = Distance), color = "purple",fill = "purple", method = "glm", method.args = list(family="binomial"), fullrange = T, alpha = 0.2) + theme_bw() + theme(axis.text = element_text(colour = "black",size=rel(1.3)), axis.title = element_text(size=rel(1.4), face = "bold"), legend.position = "none") + labs(x="Distance from focal plant (m)", y="Proportion of inflorescences\nwith pigment")
+```
+
+###Plot for Figure 3
+```{r}
+require(coefplot)
+cl <- coefplot(cor.lanes2, intercept = F, lwdOuter = 0.5, newNames = c("scale(number.of.lanes)" = "Number of lanes"), plot = F)
+cs <- coefplot(cor.speed2, intercept = F, lwdOuter = 0.5, newNames = c("scale(speed)" = "Traffic speed limit"), plot = F)
+cd <- coefplot(cor.dist2, intercept = F, lwdOuter = 0.5, newNames = c("scale(distance.m)" = "Interplant distance"), plot = F)
+ct <- coefplot(cor.traffic2, intercept = F, lwdOuter = 0.5, newNames = c("scale(number.of.cars)" = "Traffic volume"), plot = F)
+c.eff1 <- rbind(cs, ct, cl, cd)
+c.eff1 <- c.eff1[c(2,4,6,8),]
+c.eff1$type <- "Observed"
+
+cl.r <- coefplot(lanes.r, intercept = F, lwdOuter = 0.5, newNames = c("scale(number.of.lanes)" = "Number of lanes"), plot = F)
+ct.r <- coefplot(traffic.r, intercept = F, lwdOuter = 0.5, newNames = c("scale(number.of.cars)" = "Traffic volume"), plot = F)
+cs.r <- coefplot(speed.r, intercept = F, lwdOuter = 0.5, newNames = c("scale(speed)" = "Traffic speed limit"), plot = F)
+c.eff2 <- rbind(cs.r, ct.r, cl.r)
+c.eff2$type <- "Residuals\nInterplant distance"
+
+ct.r2 <- coefplot(traffic.r2, intercept = F, lwdOuter = 0.5, newNames = c("scale(number.of.cars)" = "Traffic volume"), plot = F)
+cs.r2 <- coefplot(speed.r2, intercept = F, lwdOuter = 0.5, newNames = c("scale(speed)" = "Traffic speed limit"), plot = F)
+cd.r2 <- coefplot(dist.r2, intercept = F, lwdOuter = 0.5, newNames = c("scale(distance.m)" = "Interplant distance"), plot = F)
+c.eff3 <- rbind(cs.r2,ct.r2,cd.r2)
+c.eff3$type <- "Residuals\nNumber of lanes"
+
+cl.r3 <- coefplot(lanes.r3, intercept = F, lwdOuter = 0.5, newNames = c("scale(number.of.lanes)" = "Number of lanes"), plot = F)
+cs.r3 <- coefplot(speed.r3, intercept = F, lwdOuter = 0.5, newNames = c("scale(speed)" = "Traffic speed limit"), plot = F)
+cd.r3 <- coefplot(dist.r3, intercept = F, lwdOuter = 0.5, newNames = c("scale(distance.m)" = "Interplant distance"), plot = F)
+c.eff4 <- rbind(cs.r3, cl.r3, cd.r3)
+c.eff4$type <- "Residuals\nTraffic volume"
+
+c.eff.full <- rbind(c.eff4,c.eff3,c.eff2,c.eff1)
+c.eff.full$species <- "Coreopsis"
+
+ml <- coefplot(mon.i.lanes3, intercept = F, lwdOuter = 0.5, newNames = c("scale(number.of.lanes)" = "Number of lanes"), plot = F)
+ms <- coefplot(mon.i.speed3, intercept = F, lwdOuter = 0.5, newNames = c("scale(speed)" = "Traffic speed limit"), plot = F)
+md <- coefplot(mon.i.dist3, intercept = F, lwdOuter = 0.5, newNames = c("scale(distance.m)" = "Interplant distance"), plot = F)
+mt <- coefplot(mon.i.traffic3, intercept = F, lwdOuter = 0.5, newNames = c("scale(number.of.cars)" = "Traffic volume"), plot = F)
+m.eff1 <- rbind(ms, mt, ml, md)
+m.eff1 <- m.eff1[c(2,4,6,8),]
+m.eff1$type <- "Observed"
+
+ml.r <- coefplot(mon.i.lanes.r, intercept = F, lwdOuter = 0.5, newNames = c("scale(number.of.lanes)" = "Number of lanes"), plot = F)
+ms.r <- coefplot(mon.i.speed.r, intercept = F, lwdOuter = 0.5, newNames = c("scale(speed)" = "Traffic speed limit"), plot = F)
+mt.r <- coefplot(mon.i.traffic.r, intercept = F, lwdOuter = 0.5, newNames = c("scale(number.of.cars)" = "Traffic volume"), plot = F)
+m.eff2 <- rbind(ml.r, ms.r, mt.r)
+m.eff2$type <- "Residuals\nInterplant distance"
+
+mon.traffic.r2 <- lm(residuals(mon.i.lanes) ~ scale(number.of.cars), data = road.m)
+mon.speed.r2 <- lm(residuals(mon.i.lanes) ~ scale(speed), data = road.m)
+mon.dist.r2 <- lm(residuals(mon.i.lanes) ~ scale(distance.m), data = road.m)
+ms.r2 <- coefplot(mon.speed.r2, intercept = F, lwdOuter = 0.5, newNames = c("scale(speed)" = "Traffic speed limit"), plot = F)
+mt.r2 <- coefplot(mon.traffic.r2, intercept = F, lwdOuter = 0.5, newNames = c("scale(number.of.cars)" = "Traffic volume"), plot = F)
+md.r2 <- coefplot(mon.dist.r2, intercept = F, lwdOuter = 0.5, newNames = c("scale(distance.m)" = "Interplant distance"), plot = F)
+m.eff3 <- rbind(md.r2, ms.r2, mt.r2)
+m.eff3$type <- "Residuals\nNumber of lanes"
+
+mon.lanes.r3 <- lm(residuals(mon.i.traffic) ~ scale(number.of.lanes), data = road.m)
+mon.speed.r3 <- lm(residuals(mon.i.traffic) ~ scale(speed), data = road.m)
+mon.dist.r3 <- lm(residuals(mon.i.traffic) ~ scale(distance.m), data = road.m)
+ms.r3 <- coefplot(mon.speed.r3, intercept = F, lwdOuter = 0.5, newNames = c("scale(speed)" = "Traffic speed limit"), plot = F)
+ml.r3 <- coefplot(mon.lanes.r3, intercept = F, lwdOuter = 0.5, newNames = c("scale(number.of.lanes)" = "Number of lanes"), plot = F)
+md.r3 <- coefplot(mon.dist.r3, intercept = F, lwdOuter = 0.5, newNames = c("scale(distance.m)" = "Interplant distance"), plot = F)
+m.eff4 <- rbind(md.r3, ms.r3, ml.r3)
+m.eff4$type <- "Residuals\nTraffic volume"
+
+m.eff.full <- rbind(m.eff1,m.eff2,m.eff3,m.eff4)
+m.eff.full$species <- "Monarda"
+eff.full <- rbind(c.eff.full, m.eff.full)
+eff.full$Coefficient <- factor(eff.full$Coefficient, levels = c("Traffic speed limit", "Traffic volume", "Number of lanes", "Interplant distance"))
+cbPalette <- c("#E69F00", "#56B4E9", "#009E73", "#0072B2", "#F0E442", "#D55E00", "#CC79A7", "#999999")
+fcoef <-ggplot(eff.full) + geom_point(aes(x = Value, y = Coefficient, color = type), size = 3) + geom_errorbar(aes(y = Coefficient, xmin = LowOuter, xmax = HighOuter, color = type), width = 0, size = 1) + geom_vline(xintercept = 0, lty = 2, color = "gray") + facet_grid(rows = vars(type), cols = vars(species)) + theme_bw() + theme(legend.position = "none") + xlim(-2.75,0.7) + labs(x = "Standardized slope coefficient", y = "Road characteristic") + theme(axis.text = element_text(colour = "black",size=rel(1.2)), axis.title = element_text(size=rel(1.3), face = "bold"), strip.text = element_text(size=rel(1.2))) + scale_color_manual(values = cbPalette)
+```
+
+###Effect of habitat
+###Coreopsis
+No effect of roadside habitat
+```{r}
+roadveg.c <- subset(roadveg, prop.pig.c != "NA")
+boxplot(prop.pig.c~mowed, data = roadveg.c)
+boxplot(prop.pig.c~flowers, data = roadveg.c)
+boxplot(prop.pig.c~seminatural, data = roadveg.c)
+cor.mow <- glm(prop.pig.c ~ position + scale(number.of.lanes) + mowed, data= roadveg.c, family = binomial)
+hab.w1 <- 1/fitted(lm(abs(residuals(cor.mow)) ~ roadveg.c$number.of.lanes + roadveg.c$position + roadveg.c$mowed))^2
+cor.mow2 <- glm(prop.pig.c ~ position + scale(number.of.lanes) + mowed, data= roadveg.c, family = binomial, weights = hab.w1)
+cor.flower <- glm(prop.pig.c ~ position + scale(number.of.lanes) + flowers, data= roadveg.c, family = binomial)
+hab.w2 <- 1/fitted(lm(abs(residuals(cor.flower)) ~ roadveg.c$number.of.lanes + roadveg.c$position + roadveg.c$flowers))^2
+cor.flower2 <- glm(prop.pig.c ~ position + scale(number.of.lanes) + flowers, data= roadveg.c, family = binomial, weights = hab.w2)
+cor.nat <- glm(prop.pig.c ~ position + scale(number.of.lanes) + seminatural, data= roadveg.c, family = binomial)
+hab.w3 <- 1/fitted(lm(abs(residuals(cor.nat)) ~ roadveg.c$number.of.lanes + roadveg.c$position + roadveg.c$mowed))^2
+cor.nat2 <- glm(prop.pig.c ~ position + scale(number.of.lanes) + seminatural, data= roadveg.c, family = binomial, weights = hab.w3)
+cor.lanes4 <- glm(prop.pig.c ~ position + scale(number.of.lanes), data= roadveg.c, family = binomial, weights = hab.w1)
+mods <- list("mowed"=cor.mow2, "flowers"=cor.flower2, "seminatural"=cor.nat2, "lanes"=cor.lanes4)
+aictab(cand.set = mods)
+
+c.updown <- subset(road.c, updown == "upstream" | updown == "downstream" & number.of.lanes > 0.5)
+cor.updown <- glm(prop.pig.c ~ updown + scale(number.of.lanes), data = c.updown, family = binomial)
+lane.weights2 <- 1/fitted(lm(abs(residuals(cor.updown)) ~ c.updown$number.of.lanes + c.updown$updown))^2
+cor.updown2 <- glm(prop.pig.c ~ updown + scale(number.of.lanes), data = c.updown, weights = lane.weights2, family = binomial)
+updown.sum.c <- ddply(c.updown, .(updown), summarize,
+                    mean = mean(prop.pig.c),
+                    n.obs = length(updown),
+                   se = sd(prop.pig.c)/sqrt(n.obs))
+
+m.updown <- subset(road.m, updown == "upstream" | updown == "downstream" & number.of.lanes > 0.5)
+mor.updown <- glm(prop.pig.mi ~ updown + scale(distance.m), data = m.updown, family = binomial)
+updown.sum.m <- ddply(m.updown, .(updown), summarize,
+                    mean = mean(prop.pig.mi),
+                    n.obs = length(updown),
+                   se = sd(prop.pig.mi)/sqrt(n.obs))
+
+```
+
+###Monarda
+Increased pigment transfer in lawns
+```{r}
+roadveg.m <- subset(roadveg, prop.pig.mi != "NA")
+boxplot(prop.pig.mi~mowed, data = roadveg.m)
+boxplot(prop.pig.mi~flowers, data = roadveg.m)
+boxplot(prop.pig.mi~seminatural, data = roadveg.m)
+mon.habmax <- glm(prop.pig.mi ~ scale(distance.m) + mowed + flowers + seminatural, data= roadveg.m, family = binomial)
+mon.hab2 <- glm(prop.pig.mi ~ scale(distance.m) + mowed + seminatural, data= roadveg.m, family = binomial)
+mon.mow <- glm(prop.pig.mi ~ scale(distance.m) + mowed, data= roadveg.m, family = binomial)
+mon.dist2 <- glm(prop.pig.mi ~ scale(distance.m), data= roadveg.m, family = binomial)
+mon.flower <- glm(prop.pig.mi ~ scale(distance.m) + flowers, data= roadveg.m, family = binomial)
+mon.nat <- glm(prop.pig.mi ~ scale(distance.m) + seminatural, data= roadveg.m, family = binomial)
+mods <- list("mowed"=mon.mow, "flowers"=mon.flower, "seminatural"=mon.nat,"no habitat"=mon.dist2)
+aictab(cand.set = mods)
+```

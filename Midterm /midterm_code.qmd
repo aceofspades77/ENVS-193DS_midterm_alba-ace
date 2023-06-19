@@ -1,0 +1,108 @@
+---
+title: "193DS_Midterm"
+format: html
+editor: visual
+---
+
+---
+title: "ENVS-193DS_midterm_alba-ace"
+format: html
+editor: visual
+---
+
+# Problem 1.
+
+### a.)
+
+Null hypothesis (H0): mean soil phosphorus concentration in burned areas is equal to the mean soil phosphorus concentration in unburden areas concluding that the fire did not affect phosprus levels.
+
+Alternative hypothesis (HA): mean soil phosphorus concentration in burned areas is **NOT** equal to the mean soil phosphorus concentration in unburden areas, concluding that the fire did have an effect on the soil phosphorus levels.
+
+### b.)
+
+We would use a 2 sample t-test to test the null hypothesis to comopare the means of two independent groups.
+
+### c.)
+
+-   both samples are random samples
+
+-   both populations have normal distribution
+
+-   variance of both populations are equal
+
+-   they are both independent
+
+### d.)
+
+If the data did not meet the assumptions you would have to use a: non-parametric test (if the data is not normally distributed), or a t-test that does not have equal variances. An example is the Mann-Whitney U test.
+
+### e.)
+
+According to the results from the test hypothesis i.e. that the wild fire had no effect on soil phosphorus levels. A two-sample t-test with 34 samples in the two variables (un-burned, burned) resulted in a significant difference within the two groups. Comparing the mean of the two variables, results show soil phosphorus level in "burned areas" was higher than in the unburden areas indicating a suggestive affect of the wildfire to soil phosphorous level.
+
+### f.) the null hpothesis is that mean soil phosphorus content i nthe burned areas before the fire is equal to the mean soil phosphorus content in the burned areas after the fire, while the alternative hypothesis is mean phosphorus content in the burned areas before the fire is NOT equal to the mean soil phosphorus content in the burned areas after the fire.
+
+### g.) a paired t-test would be the ideal method to compare the same area before and after. a paired t-test is best fit for assessing data that has the same means from the same group but before and affter a variable.
+
+#Problem #2
+
+```{r}
+#Install missing packages to be able to run the code. 
+#install.packages("ggpubr")
+#install.packages("AER")
+#install.packages("AICcmodavg")
+library(tidyverse)
+knitr::opts_chunk$set(echo = FALSE)
+require(broom)
+require(ggplot2)
+require(plyr)
+require(dplyr)
+require(dplyr)
+require(MASS)
+require(car)
+require(AER)
+require(ggpubr)
+require(AICcmodavg)
+```
+
+###b.)
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+#converting the .xlsx file. 
+#install.packages("here")
+library(here)
+library(readxl)
+
+data_roads_and_bees%>%
+  data_roads_bees <- here::here("ENVS-193DS_midterm_alba-ace","Midterm","Data-Roads_and_Bees_2020.xlsx") 
+#here() starts at /Users/ace/Desktop/193DS_ENVS/"
+read_excel(here("Midterm"))
+
+write.csv(data_roads_and_bees, file = here("roadcomp.csv"), row.names = FALSE)
+```
+
+
+```{r}
+# Read the remaining CSV files
+roadcomp <- read.csv(here("roadcomp.csv"), skip = 1)
+sites <- read.csv(here("roadsite.csv"))
+contig <- read.csv(here("contig.csv"), colClasses = c(Site = "factor", type = "factor"))
+veg <- read.csv(here("roadveg.csv"), skip = 1, colClasses = c(mowed = "factor", flowers = "factor", seminatural = "factor", weed = "factor"))
+veg$lawn[is.na(veg$lawn)] <- 0
+veg$lawn <- as.factor(veg$lawn)
+fvisits <- read.csv(here("flower visits.csv"))
+
+
+
+
+
+
+```
