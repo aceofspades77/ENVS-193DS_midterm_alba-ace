@@ -79,10 +79,10 @@ require(AICcmodavg)
 library(here)
 library(readxl)
 dr_here()
-here::i_am()
-data_roads_and_bees <- here::here("Desktop","193DS_ENVS","Midterm","Data-Roads_and_Bees_2020.xlsx") %>% 
+here::i_am("midterm_code.qmd")
+data_roads_and_bees <- here::here("Desktop","193DS_ENVS","Midterm","Data-Roads_and_Bees_2020.xlsx")
 #here() starts at /Users/ace/Desktop/193DS_ENVS/"
-  read_excel(here("Midterm"))
+
 
 write.csv(data_roads_and_bees, file = here("roadcomp.csv"), row.names = FALSE)
 ```
