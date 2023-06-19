@@ -70,25 +70,22 @@ require(AICcmodavg)
 ```{r}
 ```
 
-
 ```{r}
 ```
-
 
 ```{r}
 #converting the .xlsx file. 
 #install.packages("here")
 library(here)
 library(readxl)
-
-data_roads_and_bees%>%
-  data_roads_bees <- here::here("ENVS-193DS_midterm_alba-ace","Midterm","Data-Roads_and_Bees_2020.xlsx") 
+dr_here()
+here::i_am()
+data_roads_and_bees <- here::here("Desktop","193DS_ENVS","Midterm","Data-Roads_and_Bees_2020.xlsx") %>% 
 #here() starts at /Users/ace/Desktop/193DS_ENVS/"
-read_excel(here("Midterm"))
+  read_excel(here("Midterm"))
 
 write.csv(data_roads_and_bees, file = here("roadcomp.csv"), row.names = FALSE)
 ```
-
 
 ```{r}
 # Read the remaining CSV files
